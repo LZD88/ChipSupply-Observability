@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101a17">
+  <title>芯链 · 可观测性中心</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span><b>芯链可观测性中心</b><small>CHIP SUPPLY OBSERVABILITY</small></span></a>
+    <div class="top-actions">
+      <span class="live-state" id="live-state"><i></i><span>正在连接数据源</span></span>
+      <span class="updated" id="updated">尚未刷新</span>
+      <select id="range" aria-label="趋势时间范围"><option value="1">最近 1 小时</option><option value="6" selected>最近 6 小时</option><option value="24">最近 24 小时</option></select>
+      <button id="refresh">刷新数据</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <div><span class="eyebrow">REAL-TIME OPERATIONS</span><h1>系统脉搏，一屏掌握<span>。</span></h1><p>从智能采购请求到订单事件消费，统一观察性能、成本与消息可靠性。</p></div>
+      <div class="service-health" id="service-health" aria-label="服务健康状态"></div>
+    </section>
+
+    <section class="kpi-grid" aria-label="核心指标">
+      <article class="kpi accent-green"><div class="kpi-head"><span>Agent 成功率</span><i>AI</i></div><strong id="success-rate">—</strong><small>最近 5 分钟完成质量</small><div class="mini-track"><span id="success-track"></span></div></article>
+      <article class="kpi accent-amber"><div class="kpi-head"><span>请求耗时 P95</span><i>LAT</i></div><strong id="request-p95">—</strong><small>95% 的 Agent 请求低于此值</small><span class="kpi-note" id="latency-note">等待样本</span></article>
+      <article class="kpi accent-blue"><div class="kpi-head"><span>首 Token P95</span><i>TTFT</i></div><strong id="first-token">—</strong><small>用户等待首段回复的时间</small><span class="kpi-note">流式体验指标</span></article>
+      <article class="kpi accent-purple"><div class="kpi-head"><span>活跃请求</span><i>NOW</i></div><strong id="active-requests">—</strong><small>当前正在运行的 Agent 任务</small><span class="kpi-note" id="erp-qps">ERP 吞吐 —</span></article>
+      <article class="kpi accent-cyan"><div class="kpi-head"><span>Token 速率</span><i>LLM</i></div><strong id="token-rate">—</strong><small>最近 5 分钟输入 + 输出 / 秒</small><span class="kpi-note" id="token-split">输入 — · 输出 —</span></article>
+      <article class="kpi accent-rose"><div class="kpi-head"><span>累计模型成本</span><i>USD</i></div><strong id="model-cost">—</strong><small>按配置单价实时估算</small><span class="kpi-note">便于成本归因与容量规划</span></article>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel chart-panel wide">
+        <div class="panel-head"><div><span class="panel-kicker">AGENT EXPERIENCE</span><h2>响应质量趋势</h2></div><div class="legend"><span><i class="green"></i>成功率</span><span><i class="amber"></i>P95 耗时</span></div></div>
+        <div class="chart-wrap"><canvas id="experience-chart"></canvas><div class="empty-chart" id="experience-empty">等待 Prometheus 产生请求样本</div></div>
+      </article>
+
+      <article class="panel message-panel">
+        <div class="panel-head"><div><span class="panel-kicker">RABBITMQ</span><h2>消息通道</h2></div><span class="status-badge" id="rabbit-health">检测中</span></div>
+        <div class="queue-main"><div><span>业务队列积压</span><strong id="queue-total">—</strong></div><div class="queue-ring"><svg viewBox="0 0 42 42"><circle cx="21" cy="21" r="16"></circle><circle id="queue-ring" cx="21" cy="21" r="16"></circle></svg><span id="queue-grade">—</span></div></div>
+        <div class="queue-stats"><div><span>Ready</span><b id="queue-ready">—</b></div><div><span>Unacked</span><b id="queue-unacked">—</b></div><div><span>消费者</span><b id="queue-consumers">—</b></div><div><span>死信</span><b id="queue-dlq">—</b></div></div>
+        <div class="message-foot"><span>Outbox 发布成功 <b id="outbox-published">—</b></span><span>发布失败 <b id="outbox-failed">—</b></span></div>
+      </article>
+
+      <article class="panel chart-panel token-panel">
+        <div class="panel-head"><div><span class="panel-kicker">LLM USAGE</span><h2>Token 消耗趋势</h2></div><div class="legend"><span><i class="cyan"></i>输入</span><span><i class="purple"></i>输出</span></div></div>
+        <div class="chart-wrap"><canvas id="token-chart"></canvas><div class="empty-chart" id="token-empty">等待模型用量数据</div></div>
+      </article>
+
+      <article class="panel flow-panel wide">
+        <div class="panel-head"><div><span class="panel-kicker">EVENT DELIVERY</span><h2>可靠事件链路</h2></div><span class="flow-caption">至少一次投递 · 幂等消费</span></div>
+        <div class="event-flow">
+          <div class="flow-node"><span class="node-icon">DB</span><div><b>MySQL Outbox</b><small>业务事务同库落盘</small></div><em id="flow-outbox">持久化</em></div>
+          <span class="flow-arrow"><i></i></span>
+          <div class="flow-node"><span class="node-icon rabbit">MQ</span><div><b>Topic Exchange</b><small>Publisher Confirm</small></div><em id="flow-mq">检测中</em></div>
+          <span class="flow-arrow"><i></i></span>
+          <div class="flow-node"><span class="node-icon consumer">ID</span><div><b>幂等消费者</b><small>唯一键防止重复处理</small></div><em id="flow-consumer">等待指标</em></div>
+          <span class="flow-arrow danger"><i></i></span>
+          <div class="flow-node"><span class="node-icon dlq">!</span><div><b>Dead Letter Queue</b><small>重试耗尽隔离故障</small></div><em id="flow-dlq">无积压</em></div>
+        </div>
+      </article>
+
+      <article class="panel trace-panel">
+        <div class="panel-head"><div><span class="panel-kicker">DISTRIBUTED TRACING</span><h2>链路定位</h2></div><span class="trace-symbol">⌁</span></div>
+        <p>输入接口返回的 Trace ID，在 Tempo 中查看 Agent、MCP 与 ERP 的完整调用链。</p>
+        <label for="trace-id">TRACE ID</label>
+        <div class="trace-input"><input id="trace-id" placeholder="例如 TRC-A8F3…" autocomplete="off"><button id="open-trace">在 Grafana 中查询 ↗</button></div>
+        <div class="trace-links"><a href="http://localhost:3001/d/chipsupply-overview" target="_blank" rel="noopener">打开 Grafana 看板</a><a href="http://localhost:9090" target="_blank" rel="noopener">查询 Prometheus</a><a href="http://localhost:15672" target="_blank" rel="noopener">管理 RabbitMQ</a></div>
+      </article>
+    </section>
+    <footer><span>芯链 / OBSERVABILITY CENTER</span><span>Prometheus · OpenTelemetry · Tempo · RabbitMQ</span></footer>
+  </main>
+  <div class="toast" id="toast" hidden></div>
+</body>
+</html>

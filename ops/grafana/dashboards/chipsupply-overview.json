@@ -1,0 +1,18 @@
+{
+  "uid": "chipsupply-overview",
+  "title": "芯链采购平台 · Agent 与业务稳定性",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {"id":1,"type":"stat","title":"Agent 成功率","gridPos":{"x":0,"y":0,"w":6,"h":5},"targets":[{"expr":"sum(rate(agent_requests_total{status=\"success\"}[5m])) / clamp_min(sum(rate(agent_requests_total[5m])), 0.000001)","legendFormat":"成功率"}],"fieldConfig":{"defaults":{"unit":"percentunit","min":0,"max":1}}},
+    {"id":2,"type":"stat","title":"LLM 累计成本","gridPos":{"x":6,"y":0,"w":6,"h":5},"targets":[{"expr":"sum(agent_llm_cost_usd_total)","legendFormat":"USD"}],"fieldConfig":{"defaults":{"unit":"currencyUSD"}}},
+    {"id":3,"type":"stat","title":"Outbox 待投递","gridPos":{"x":12,"y":0,"w":6,"h":5},"targets":[{"expr":"sum(chipsupply_outbox_publish_failures_total)","legendFormat":"失败重试"}]},
+    {"id":4,"type":"stat","title":"接口限流拒绝","gridPos":{"x":18,"y":0,"w":6,"h":5},"targets":[{"expr":"sum(chipsupply_rate_limit_rejected_total)","legendFormat":"拒绝"}]},
+    {"id":5,"type":"timeseries","title":"Agent 请求耗时 P95","gridPos":{"x":0,"y":5,"w":12,"h":8},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, endpoint) (rate(agent_request_duration_seconds_bucket[5m])))","legendFormat":"{{endpoint}}"}]},
+    {"id":6,"type":"timeseries","title":"首 Token 延迟 P95","gridPos":{"x":12,"y":5,"w":12,"h":8},"targets":[{"expr":"histogram_quantile(0.95, sum by (le, model) (rate(agent_first_token_seconds_bucket[5m])))","legendFormat":"{{model}}"}]},
+    {"id":7,"type":"timeseries","title":"输入 / 输出 Token","gridPos":{"x":0,"y":13,"w":12,"h":8},"targets":[{"expr":"sum by(model) (rate(agent_llm_input_tokens_total[5m]))","legendFormat":"输入 {{model}}"},{"expr":"sum by(model) (rate(agent_llm_output_tokens_total[5m]))","legendFormat":"输出 {{model}}"}]},
+    {"id":8,"type":"timeseries","title":"ERP HTTP 请求吞吐","gridPos":{"x":12,"y":13,"w":12,"h":8},"targets":[{"expr":"sum by(uri,method) (rate(http_server_requests_seconds_count{application=\"ChipSupplyProcurementPlatform\"}[5m]))","legendFormat":"{{method}} {{uri}}"}]}
+  ]
+}
