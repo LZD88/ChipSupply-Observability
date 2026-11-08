@@ -17,9 +17,21 @@
 
 先按 [README](README.md#仓库布局与依赖) 将三个仓库克隆到同一级目录，再进入本仓库根目录执行以下步骤。
 
-1. 将 `.env.example` 复制为 `.env`，填写所有必填项。不要把 `.env` 提交到仓库。
-2. 在本目录执行 `docker compose up --build -d`。
-3. 使用 `docker compose ps` 和 `docker compose logs -f erp agent-api mcp` 查看状态。
+1. 将 `.env.example` 复制为 `.env`，填写所有必填项。`DECISION_DB_PASSWORD` 与
+   `EVALUATION_DB_PASSWORD` 使用两个不同的随机值，`MCP_INVOCATION_SIGNING_SECRET` 至少
+   32 字节；不要把 `.env` 提交到仓库。
+2. 按需设置 `APP_CAPABILITY_BOOTSTRAP=reviewer=evaluation:view,maintainer=evaluation:view|evaluation:maintain`。
+3. 执行 `docker compose config`，确认必填变量齐全且渲染配置中没有意外 ERP 凭据进入
+   `evaluation-worker`。
+4. 在本目录执行 `docker compose up --build -d`。
+5. 使用 `docker compose ps` 和
+   `docker compose logs -f agent-schema-init decision-db-bootstrap erp agent-api mcp evaluation-worker`
+   查看状态。
+
+`agent-schema-init` 使用部署数据库管理员创建加法表后即退出；`decision-db-bootstrap` 随后只向
+`chipchain_mcp` 授予决策/事件/claim 所需权限，只向 `chipchain_evaluation` 授予评测队列与结果表
+所需权限。worker 不配置 `JAVA_API_*`、`ERP_MCP_URL` 或 `ERP_API_TOKEN`，工作流订单调用只进入
+模拟器。首次注册 bootstrap 名单中的用户后，重启 `agent-api` 一次以应用授权。
 
 Windows 上已分别启动 Agent API（8090）和 ERP（8082）时，可单独接入观测：
 
@@ -39,8 +51,19 @@ powershell -ExecutionPolicy Bypass -File .\ops\start-observability.ps1
 - ERP 指标：<http://localhost:8082/actuator/prometheus>
 - Prometheus：<http://localhost:9090>
 - Grafana：<http://localhost:3001>，看板位于“芯链采购平台”目录
-- 可观测性中心：<http://localhost:3002>，集中展示 Agent、ERP、Outbox、RabbitMQ、成本与链路指标
+- 可观测性中心：<http://localhost:3002>，分别展示实时运行指标与持久化“决策质量”评测证据
 - RabbitMQ 管理台：<http://localhost:15672>
 - Trace：在 Grafana Explore 中选择 Tempo，根据 Trace ID 查询
 
 Redis 仅承担缓存与热点库存锁。Redis、RabbitMQ 或监控组件短时不可用不会阻断订单、库存等核心业务；待投递事件保留在 MySQL Outbox，RabbitMQ 恢复后继续发布。
+
+## 决策质量演示
+
+登录采购助手后，在浏览器保持同一主机名（建议都使用 `localhost`），再打开可观测性中心并切换
+“决策质量”。HttpOnly 登录 Cookie 的路径为 `/api`，浏览器会将它发给同源质量代理；Nginx
+只允许 GET/HEAD，并返回 `Cache-Control: no-store`。
+
+默认套件与本地/CI 运行命令见 Agent 仓库 `docs/evaluation-system.md`。创建运行后，
+`evaluation-worker` 从 MySQL 原子领取任务并增量写入场景结果。页面应显示 suite/version、环境、
+状态、每项指标分子/分母、当前基线和场景钻取。停止 Prometheus 或 Tempo 后刷新页面，相应实时
+链接显示不可用，但已存评测报告继续显示。

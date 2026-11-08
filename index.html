@@ -7,6 +7,7 @@
   <title>芯链 · 可观测性中心</title>
   <link rel="stylesheet" href="/styles.css">
   <script defer src="/app.js"></script>
+  <script type="module" src="/quality.mjs"></script>
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -21,6 +22,11 @@
   </header>
 
   <main>
+    <nav class="view-tabs" aria-label="看板视图">
+      <button id="show-live" class="active" type="button">实时运行</button>
+      <button id="show-quality" type="button">决策质量</button>
+    </nav>
+    <div id="live-view">
     <section class="intro">
       <div><span class="eyebrow">REAL-TIME OPERATIONS</span><h1>系统脉搏，一屏掌握<span>。</span></h1><p>从智能采购请求到订单事件消费，统一观察性能、成本与消息可靠性。</p></div>
       <div class="service-health" id="service-health" aria-label="服务健康状态"></div>
@@ -73,6 +79,56 @@
         <div class="trace-input"><input id="trace-id" placeholder="例如 TRC-A8F3…" autocomplete="off"><button id="open-trace">在 Grafana 中查询 ↗</button></div>
         <div class="trace-links"><a href="http://localhost:3001/d/chipsupply-overview" target="_blank" rel="noopener">打开 Grafana 看板</a><a href="http://localhost:9090" target="_blank" rel="noopener">查询 Prometheus</a><a href="http://localhost:15672" target="_blank" rel="noopener">管理 RabbitMQ</a></div>
       </article>
+    </section>
+    </div>
+
+    <section id="quality-view" class="quality-view" hidden aria-label="决策质量">
+      <div class="quality-hero">
+        <div><span class="eyebrow">OFFLINE EVALUATION EVIDENCE</span><h1>决策质量，有据可查<span>。</span></h1><p>固定场景评测与持久化报告；不代表线上准确率、采购节省或业务 ROI。</p></div>
+        <div class="quality-controls">
+          <label for="quality-run-select">评测运行</label>
+          <select id="quality-run-select" aria-label="选择评测运行"></select>
+          <button id="quality-refresh" type="button">刷新报告</button>
+        </div>
+      </div>
+
+      <div id="quality-state" class="quality-state" data-state="loading">正在读取持久化评测报告…</div>
+      <div id="quality-content" hidden>
+        <section class="quality-summary" aria-label="运行摘要">
+          <article><span>证据类型</span><b id="quality-evidence-label">离线 / 测试证据</b></article>
+          <article><span>套件版本</span><b id="quality-suite">—</b></article>
+          <article><span>环境</span><b id="quality-environment">—</b></article>
+          <article><span>执行模式</span><b id="quality-mode">—</b></article>
+          <article><span>运行状态</span><b id="quality-run-status" class="quality-status">—</b><small id="quality-incomplete" hidden>报告不完整，只展示已产生结果</small></article>
+          <article><span>当前基线</span><b id="quality-baseline">未设置</b></article>
+        </section>
+
+        <section class="quality-grid">
+          <article class="panel quality-metric-panel">
+            <div class="panel-head"><div><span class="panel-kicker">DECLARED METRICS</span><h2>指标与分母</h2></div><span class="quality-hint">零分母不计为通过</span></div>
+            <div class="quality-table-wrap"><table class="quality-table"><thead><tr><th>指标</th><th>值</th><th>口径</th><th>模式</th></tr></thead><tbody id="quality-metrics"></tbody></table></div>
+          </article>
+
+          <article class="panel quality-regression-panel">
+            <div class="panel-head"><div><span class="panel-kicker">BASELINE DELTA</span><h2>回归与变化</h2></div></div>
+            <ul id="quality-regressions" class="quality-regressions"></ul>
+          </article>
+
+          <article class="panel quality-scenario-panel">
+            <div class="panel-head"><div><span class="panel-kicker">SCENARIO EVIDENCE</span><h2>场景与证据钻取</h2></div><span class="quality-hint">只显示实际产生的结果</span></div>
+            <div id="quality-scenarios" class="quality-scenarios"></div>
+          </article>
+
+          <article class="panel quality-telemetry-panel">
+            <div class="panel-head"><div><span class="panel-kicker">OPTIONAL LIVE LINKS</span><h2>实时遥测（可选）</h2></div></div>
+            <p>评测报告来自 MySQL；以下实时服务不可用时不会影响报告、指标或场景证据。</p>
+            <div class="quality-links">
+              <a id="quality-prometheus-link" data-label="Prometheus" data-href="http://localhost:9090" target="_blank" rel="noopener">Prometheus（状态未验证）</a>
+              <a id="quality-tempo-link" data-label="Tempo / Grafana" data-href="http://localhost:3001/explore" target="_blank" rel="noopener">Tempo / Grafana（状态未验证）</a>
+            </div>
+          </article>
+        </section>
+      </div>
     </section>
     <footer><span>芯链 / OBSERVABILITY CENTER</span><span>Prometheus · OpenTelemetry · Tempo · RabbitMQ</span></footer>
   </main>

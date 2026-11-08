@@ -156,8 +156,10 @@ async function refresh() {
     const data = Object.fromEntries(metrics); const health = renderServices(services);
     renderKpis(data); renderQueue(data, health.RabbitMQ);
     setText('updated', `更新于 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`);
+    window.dispatchEvent(new CustomEvent('live-telemetry-status', { detail: { prometheus: true } }));
   } catch (error) {
     const live = $('live-state'); live.className = 'live-state error'; live.querySelector('span').textContent = '数据源连接失败'; toast(error.message || '刷新失败');
+    window.dispatchEvent(new CustomEvent('live-telemetry-status', { detail: { prometheus: false } }));
   } finally { state.refreshing = false; $('refresh').disabled = false; $('refresh').textContent = '刷新数据'; }
 }
 

@@ -69,7 +69,7 @@ if (-not (Test-Ready 'http://127.0.0.1:9090/-/ready')) {
 }
 
 if (-not (Test-Ready 'http://127.0.0.1:3002/healthz')) {
-    $dashboardArgs = @('"' + (Join-Path $dashboardRoot 'serve.py') + '"', '--host', '127.0.0.1', '--port', '3002')
+    $dashboardArgs = @('"' + (Join-Path $dashboardRoot 'serve.py') + '"', '--host', '127.0.0.1', '--port', '3002', '--agent-api-url', 'http://127.0.0.1:8090', '--tempo-url', 'http://127.0.0.1:3200')
     $service = Start-Process -FilePath $PythonPath -ArgumentList $dashboardArgs -WorkingDirectory $dashboardRoot -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput (Join-Path $logRoot 'dashboard.out.log') -RedirectStandardError (Join-Path $logRoot 'dashboard.err.log')
     Wait-Ready 'http://127.0.0.1:3002/healthz' $service
