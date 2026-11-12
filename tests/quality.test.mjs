@@ -18,6 +18,17 @@ test('completed failed cancelled and partial statuses remain distinct', () => {
   assert.equal(statusPresentation('CANCELLED').tone, 'muted');
   assert.equal(statusPresentation('PARTIAL').tone, 'warning');
   assert.equal(statusPresentation('PARTIAL').incomplete, true);
+  assert.deepEqual(statusPresentation('PASSED'), { label: '通过', tone: 'success', incomplete: false });
+});
+
+test('structured telemetry shows readable values and units without changing sample counts', () => {
+  const latency = metricPresentation({ name: 'latency_distribution', denominator: 4, excluded: 2,
+    value: { p50: 120, p95: 250, min: 0, max: 300 } });
+  assert.equal(latency.value, 'P50 120 ms · P95 250 ms · 最小 0 ms · 最大 300 ms');
+  assert.equal(latency.detail, '分子 — / 分母 4 · 排除 2');
+  const tokens = metricPresentation({ name: 'token_usage', denominator: 4, numerator: 1500,
+    value: { input: 1000, output: 500, total: 1500 } });
+  assert.equal(tokens.value, '总计 1,500 · 输入 1,000 · 输出 500');
 });
 
 test('zero denominator is not presented as a pass', () => {

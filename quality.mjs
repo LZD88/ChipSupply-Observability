@@ -7,9 +7,15 @@ export function metricPresentation(metric) {
   if (denominator === 0 || value == null) {
     return { value: '不适用', detail: `分母 0 · 排除 ${metric?.excluded || 0}`, state: 'not-applicable' };
   }
-  const rendered = typeof value === 'number'
+  const numberLabel = (number) => typeof number === 'number' ? number.toLocaleString('zh-CN', { maximumFractionDigits: 3 }) : '—';
+  let rendered = typeof value === 'number'
     ? (metric.unit === 'ratio' ? `${(value * 100).toFixed(1)}%` : value.toLocaleString('zh-CN'))
     : JSON.stringify(value);
+  if (metric.name === 'latency_distribution' && typeof value === 'object') {
+    rendered = `P50 ${numberLabel(value.p50)} ms · P95 ${numberLabel(value.p95)} ms · 最小 ${numberLabel(value.min)} ms · 最大 ${numberLabel(value.max)} ms`;
+  } else if (metric.name === 'token_usage' && typeof value === 'object') {
+    rendered = `总计 ${numberLabel(value.total)} · 输入 ${numberLabel(value.input)} · 输出 ${numberLabel(value.output)}`;
+  }
   return {
     value: rendered,
     detail: `分子 ${metric.numerator ?? '—'} / 分母 ${denominator} · 排除 ${metric.excluded || 0}`,
@@ -26,14 +32,14 @@ export function qualityState({ status, runCount = 0 } = {}) {
 export function statusPresentation(status) {
   const normalized = String(status || 'UNKNOWN').toUpperCase();
   const labels = {
-    COMPLETED: '已完成', FAILED: '失败', CANCELLED: '已取消', PARTIAL: '部分完成',
+    COMPLETED: '已完成', PASSED: '通过', FAILED: '失败', CANCELLED: '已取消', PARTIAL: '部分完成',
     TIMED_OUT: '超时', RUNNING: '运行中', QUEUED: '排队中',
   };
-  const tone = normalized === 'COMPLETED' ? 'success'
+  const tone = ['COMPLETED', 'PASSED'].includes(normalized) ? 'success'
     : ['FAILED', 'TIMED_OUT'].includes(normalized) ? 'danger'
       : normalized === 'CANCELLED' ? 'muted'
         : normalized === 'PARTIAL' ? 'warning' : 'active';
-  return { label: labels[normalized] || normalized, tone, incomplete: normalized !== 'COMPLETED' };
+  return { label: labels[normalized] || normalized, tone, incomplete: !['COMPLETED', 'PASSED'].includes(normalized) };
 }
 
 export function regressionItems(comparisonPayload) {
@@ -99,8 +105,23 @@ function showState(name, message = '') {
   host.dataset.state = name;
   host.textContent = message;
   host.hidden = name === 'ready';
+  const shell = element('quality-empty-shell');
+  if (shell) shell.hidden = name === 'ready';
+  const loginLink = element('quality-login-link');
+  if (loginLink) loginLink.hidden = name !== 'unauthorized';
+  element('quality-refresh').disabled = name === 'loading';
+  element('quality-run-select').disabled = name !== 'ready';
   element('quality-content').hidden = name !== 'ready';
 }
+
+const modeLabel = (mode) => ({ 'rule-contract': '规则契约', 'workflow-safety': '工作流安全' }[mode] || mode || '—');
+const metricLabels = {
+  hard_constraint_pass_rate: '硬约束通过率', expected_recommendation_agreement: '推荐一致率',
+  unsafe_write_prevention: '危险写入拦截率', approval_boundary_compliance: '审批边界符合率',
+  scenario_completion_rate: '场景完成率', latency_ms: '执行耗时',
+  deterministic_repeatability: '确定性复现率', latency_distribution: '执行耗时分布',
+  token_usage: 'Token 用量', estimated_model_cost: '模型成本估算',
+};
 
 function renderRunHeader(report, baseline) {
   const status = statusPresentation(report.status);
@@ -108,10 +129,12 @@ function renderRunHeader(report, baseline) {
   badge.textContent = status.label;
   badge.className = `quality-status ${status.tone}`;
   element('quality-suite').textContent = `${report.suiteId}@${report.suiteVersion}`;
-  element('quality-environment').textContent = report.manifest?.environment || '未记录';
-  element('quality-mode').textContent = report.executionMode || report.manifest?.executionMode || '未记录';
+  const environment = report.manifest?.environment;
+  element('quality-environment').textContent = ({ 'isolated-test': '隔离测试', local: '本地', ci: 'CI', staging: '预发布' })[environment] || environment || '未记录';
+  element('quality-mode').textContent = modeLabel(report.executionMode || report.manifest?.executionMode);
   element('quality-baseline').textContent = baseline?.runId || '未设置';
   element('quality-evidence-label').textContent = '离线 / 测试证据';
+  element('quality-case-count').textContent = `${(report.cases || []).length} 次`;
   element('quality-incomplete').hidden = !status.incomplete;
 }
 
@@ -121,10 +144,10 @@ function renderMetrics(metrics) {
     const display = metricPresentation(metric);
     const row = document.createElement('tr'); row.dataset.state = display.state;
     row.append(
-      textNode('td', metric.name || '未命名指标'),
+      textNode('td', metricLabels[metric.name] || metric.name || '未命名指标'),
       textNode('td', display.value, 'metric-value'),
       textNode('td', display.detail),
-      textNode('td', metric.executionMode || '—'),
+      textNode('td', modeLabel(metric.executionMode)),
     );
     host.append(row);
   });
@@ -235,7 +258,7 @@ async function loadReport(runId) {
     renderRunHeader(report, baseline); renderMetrics(report.metrics); renderRegressions(comparison);
     renderScenarios(report.cases); showState('ready');
   } catch (error) {
-    if ([401, 403].includes(error.status)) showState('unauthorized', '没有查看决策质量的权限，请在 Agent 登录并申请 evaluation:view。');
+    if ([401, 403].includes(error.status)) showState('unauthorized', '当前账号没有评测报告查看权限。请先登录采购助手，或联系管理员开通权限。');
     else showState('error', `持久化评测报告暂时不可用：${error.message}`);
   }
 }
@@ -254,7 +277,7 @@ async function loadRuns() {
     });
     await loadReport(select.value);
   } catch (error) {
-    if ([401, 403].includes(error.status)) showState('unauthorized', '没有查看决策质量的权限，请在 Agent 登录并申请 evaluation:view。');
+    if ([401, 403].includes(error.status)) showState('unauthorized', '当前账号没有评测报告查看权限。请先登录采购助手，或联系管理员开通权限。');
     else showState('error', `持久化评测报告暂时不可用：${error.message}`);
   }
 }
@@ -262,20 +285,28 @@ async function loadRuns() {
 export function bootQualityView() {
   const qualityView = element('quality-view');
   if (!qualityView) return;
-  element('show-live').addEventListener('click', () => {
-    element('live-view').hidden = false; qualityView.hidden = true;
-    element('show-live').classList.add('active'); element('show-quality').classList.remove('active');
-  });
-  element('show-quality').addEventListener('click', () => {
-    element('live-view').hidden = true; qualityView.hidden = false;
-    element('show-live').classList.remove('active'); element('show-quality').classList.add('active');
-    loadRuns(); probeTelemetry();
-  });
+  const selectView = () => {
+    const quality = window.location.hash === '#evaluations';
+    element('live-view').hidden = quality; qualityView.hidden = !quality;
+    element('page-location').textContent = quality ? '评测中心' : 'Agent观测中心';
+    element('range').hidden = quality; element('refresh').hidden = quality;
+    for (const [id, active] of [['show-live', !quality], ['show-quality', quality]]) {
+      const button = element(id);
+      button.classList.toggle('active', active);
+      if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
+    }
+    if (quality) { loadRuns(); probeTelemetry(); }
+    else window.dispatchEvent(new Event('resize'));
+  };
+  element('show-live').addEventListener('click', () => { window.location.hash = 'overview'; });
+  element('show-quality').addEventListener('click', () => { window.location.hash = 'evaluations'; });
+  window.addEventListener('hashchange', selectView);
   element('quality-refresh').addEventListener('click', () => { loadRuns(); probeTelemetry(); });
   element('quality-run-select').addEventListener('change', (event) => loadReport(event.target.value));
   window.addEventListener('live-telemetry-status', (event) => updateTelemetry(event.detail));
   updateTelemetry({ prometheus: null, tempo: null });
   probeTelemetry();
+  selectView();
 }
 
 if (typeof document !== 'undefined') bootQualityView();

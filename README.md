@@ -1,8 +1,11 @@
 # 芯链可观测性中心
 
-面向芯片采购平台的独立运行态与决策质量中心。实时页通过 Nginx 同源代理调用 Prometheus；
-“决策质量”页通过只读 `/api/evaluations/` 代理读取 Agent MySQL 中的持久化评测报告。两者的
+面向芯片采购平台的独立运行态与决策质量中心。Agent观测中心通过同源代理调用 Prometheus；
+“评测中心”通过只读 `/api/evaluations/` 代理读取 Agent MySQL 中的持久化评测报告。两者的
 数据源、状态和故障提示互相独立。
+
+界面采用深蓝侧栏与浅色工作区，可直接访问 `/#overview` 和 `/#evaluations`，支持浏览器返回及手机布局。
+Agent观测中心趋势图分别以百分比、秒显示成功率与 P95；评测中心按运行摘要、质量指标、场景证据、基线变化分区展示。
 
 ## 看板内容
 
@@ -36,7 +39,7 @@ cd ChipSupply-Observability
 ## 运行
 
 先执行 `docker compose config` 检查必填变量，再运行 `docker compose up --build -d`，访问
-<http://localhost:3002>。顶部可在“实时运行”和“决策质量”间切换。RabbitMQ 管理台为
+<http://localhost:3002>。侧栏可在“Agent观测中心”和“评测中心”间切换。RabbitMQ 管理台为
 <http://localhost:15672>，Grafana 为 <http://localhost:3001>。
 
 Compose 会先运行一次性 `agent-schema-init`，再由 `decision-db-bootstrap` 为 MCP 和评测 worker

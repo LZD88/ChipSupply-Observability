@@ -85,7 +85,7 @@ class ProxyTests(unittest.TestCase):
             with self.opener.open(dashboard + "/healthz") as response:
                 self.assertEqual(response.read(), b"ok\n")
             with self.opener.open(dashboard + "/") as response:
-                self.assertIn("可观测性中心", response.read().decode())
+                self.assertIn("评测与观测中心", response.read().decode())
             with self.assertRaises(HTTPError) as raised:
                 self.opener.open(dashboard + "/prometheus/api/v1/query?query=up")
             self.assertEqual(raised.exception.code, 502)

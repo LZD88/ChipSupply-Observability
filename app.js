@@ -109,20 +109,32 @@ function normalizeSeries(result, label) {
   return result.map((series, index) => ({ label: label(series, index), values: series.values.map(([time, item]) => [Number(time), Number(item)]).filter(([, item]) => Number.isFinite(item)) }));
 }
 
-function drawChart(canvas, series, colors, formatY) {
+function drawChart(canvas, series, colors, formatY, dualAxis = false) {
   const parent = canvas.parentElement; const rect = parent.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.max(1, rect.width * dpr); canvas.height = Math.max(1, rect.height * dpr);
   const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr); const w = rect.width, h = rect.height;
-  const pad = { l: 42, r: 14, t: 12, b: 25 }; const all = series.flatMap((item) => item.values);
+  const pad = { l: 42, r: dualAxis ? 43 : 14, t: 12, b: 25 }; const all = series.flatMap((item) => item.values);
   if (!all.length) return false;
   const minX = Math.min(...all.map(([x]) => x)), maxX = Math.max(...all.map(([x]) => x));
-  let maxY = Math.max(...all.map(([, y]) => y), 0.0001); let minY = Math.min(0, ...all.map(([, y]) => y));
+  const maxY = dualAxis ? 100 : Math.max(...all.map(([, y]) => y), 0.0001);
+  const minY = dualAxis ? 0 : Math.min(0, ...all.map(([, y]) => y));
+  const latencyValues = series.filter((item) => item.label === 'P95 耗时').flatMap((item) => item.values.map(([, value]) => value));
+  const latencyMax = Math.max(...latencyValues, 1);
   const x = (item) => pad.l + ((item - minX) / Math.max(1, maxX - minX)) * (w - pad.l - pad.r);
-  const y = (item) => h - pad.b - ((item - minY) / Math.max(.000001, maxY - minY)) * (h - pad.t - pad.b);
-  ctx.font = '9px system-ui'; ctx.fillStyle = '#65726c'; ctx.strokeStyle = 'rgba(225,236,230,.07)'; ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i += 1) { const yy = pad.t + (h - pad.t - pad.b) * i / 4; ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(w - pad.r, yy); ctx.stroke(); const value = maxY - (maxY - minY) * i / 4; ctx.fillText(formatY(value), 2, yy + 3); }
+  const y = (item, right = false) => h - pad.b - ((item - (right ? 0 : minY)) / Math.max(.000001, right ? latencyMax : maxY - minY)) * (h - pad.t - pad.b);
+  ctx.font = '10px system-ui'; ctx.fillStyle = '#8b97a8'; ctx.strokeStyle = '#eaf0f5'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i += 1) {
+    const yy = pad.t + (h - pad.t - pad.b) * i / 4;
+    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(w - pad.r, yy); ctx.stroke();
+    const value = maxY - (maxY - minY) * i / 4;
+    ctx.fillText(dualAxis ? `${value.toFixed(0)}%` : formatY(value), 2, yy + 3);
+    if (dualAxis && latencyValues.length) {
+      const latency = latencyMax * (1 - i / 4);
+      ctx.textAlign = 'right'; ctx.fillText(`${latency.toFixed(latencyMax < 10 ? 1 : 0)}s`, w - 2, yy + 3); ctx.textAlign = 'left';
+    }
+  }
   for (let i = 0; i <= 4; i += 1) { const stamp = minX + (maxX - minX) * i / 4; const label = new Date(stamp * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }); ctx.fillText(label, x(stamp) - 14, h - 5); }
-  series.forEach((item, index) => { if (!item.values.length) return; const gradient = ctx.createLinearGradient(0, pad.t, 0, h - pad.b); gradient.addColorStop(0, `${colors[index % colors.length]}33`); gradient.addColorStop(1, `${colors[index % colors.length]}00`); ctx.beginPath(); item.values.forEach(([xx, yy], point) => point ? ctx.lineTo(x(xx), y(yy)) : ctx.moveTo(x(xx), y(yy))); ctx.lineTo(x(item.values.at(-1)[0]), h - pad.b); ctx.lineTo(x(item.values[0][0]), h - pad.b); ctx.closePath(); ctx.fillStyle = gradient; ctx.fill(); ctx.beginPath(); item.values.forEach(([xx, yy], point) => point ? ctx.lineTo(x(xx), y(yy)) : ctx.moveTo(x(xx), y(yy))); ctx.strokeStyle = colors[index % colors.length]; ctx.lineWidth = 1.8; ctx.stroke(); });
+  series.forEach((item, index) => { if (!item.values.length) return; const plotY = (value) => y(value, dualAxis && item.label === 'P95 耗时'); const gradient = ctx.createLinearGradient(0, pad.t, 0, h - pad.b); gradient.addColorStop(0, `${colors[index % colors.length]}20`); gradient.addColorStop(1, `${colors[index % colors.length]}00`); ctx.beginPath(); item.values.forEach(([xx, yy], point) => point ? ctx.lineTo(x(xx), plotY(yy)) : ctx.moveTo(x(xx), plotY(yy))); ctx.lineTo(x(item.values.at(-1)[0]), h - pad.b); ctx.lineTo(x(item.values[0][0]), h - pad.b); ctx.closePath(); ctx.fillStyle = gradient; ctx.fill(); ctx.beginPath(); item.values.forEach(([xx, yy], point) => point ? ctx.lineTo(x(xx), plotY(yy)) : ctx.moveTo(x(xx), plotY(yy))); ctx.strokeStyle = colors[index % colors.length]; ctx.lineWidth = 1.8; ctx.stroke(); });
   return true;
 }
 
@@ -130,17 +142,17 @@ async function refreshCharts() {
   const successExpression = `${instantQueries.success} * 100`;
   const latencyExpression = 'histogram_quantile(0.95, sum by (le) (rate(agent_request_duration_seconds_bucket[5m])))';
   const [success, latency, input, output] = await Promise.all([queryRange(successExpression), queryRange(latencyExpression), queryRange('sum(rate(agent_llm_input_tokens_total[5m]))'), queryRange('sum(rate(agent_llm_output_tokens_total[5m]))')]);
-  const experience = [...normalizeSeries(success, () => '成功率'), ...normalizeSeries(latency, () => 'P95 耗时')];
+  const experience = [normalizeSeries(success, () => '成功率')[0] || { label: '成功率', values: [] }, normalizeSeries(latency, () => 'P95 耗时')[0] || { label: 'P95 耗时', values: [] }];
   const token = [...normalizeSeries(input, () => '输入'), ...normalizeSeries(output, () => '输出')];
   state.charts = { experience, token };
-  $('experience-empty').hidden = drawChart($('experience-chart'), experience, ['#78d9a7', '#f1bb71'], (v) => v >= 10 ? v.toFixed(0) : v.toFixed(1));
-  $('token-empty').hidden = drawChart($('token-chart'), token, ['#69cbd1', '#b39be5'], (v) => v.toFixed(v < 10 ? 1 : 0));
+  $('experience-empty').hidden = drawChart($('experience-chart'), experience, ['#239b7f', '#d8a14b'], (v) => v >= 10 ? v.toFixed(0) : v.toFixed(1), true);
+  $('token-empty').hidden = drawChart($('token-chart'), token, ['#388fa4', '#8e79c7'], (v) => v.toFixed(v < 10 ? 1 : 0));
 }
 
 function redrawCharts() {
   if (!state.charts.experience) return;
-  $('experience-empty').hidden = drawChart($('experience-chart'), state.charts.experience, ['#78d9a7', '#f1bb71'], (v) => v >= 10 ? v.toFixed(0) : v.toFixed(1));
-  $('token-empty').hidden = drawChart($('token-chart'), state.charts.token, ['#69cbd1', '#b39be5'], (v) => v.toFixed(v < 10 ? 1 : 0));
+  $('experience-empty').hidden = drawChart($('experience-chart'), state.charts.experience, ['#239b7f', '#d8a14b'], (v) => v >= 10 ? v.toFixed(0) : v.toFixed(1), true);
+  $('token-empty').hidden = drawChart($('token-chart'), state.charts.token, ['#388fa4', '#8e79c7'], (v) => v.toFixed(v < 10 ? 1 : 0));
 }
 
 function toast(message) { const node = $('toast'); node.textContent = message; node.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { node.hidden = true; }, 3500); }
