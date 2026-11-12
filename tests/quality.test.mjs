@@ -49,3 +49,38 @@ test('Prometheus and Tempo availability degrade independently', () => {
   assert.equal(telemetryPresentation(true, 'Tempo').disabled, false);
   assert.equal(telemetryPresentation(null, 'Tempo').state, 'unknown');
 });
+
+test('repeated regressions identify the execution and display all-sample stability', () => {
+  const items = regressionItems({
+    gates: { failures: [{ scenarioId: 'choice', repetition: 1, priority: 'ASSERTION' }] },
+    comparison: {
+      scenarioDiffs: [
+        { scenarioId: 'choice', repetition: 1, assertionRegression: true, recommendation: { changed: true } },
+        { scenarioId: 'choice', repetition: 2, assertionRegression: false, recommendation: { changed: true, before: 1, after: 2 } },
+      ],
+      scenarioSummaries: [{
+        scenarioId: 'choice',
+        before: { sampleCount: 3, passedCount: 3, passRate: 1, hasVariation: false },
+        after: { sampleCount: 3, passedCount: 2, passRate: 2 / 3, hasVariation: true },
+      }],
+    },
+  });
+  assert.match(items[0].label, /第 1 次/);
+  assert.match(items[1].label, /第 1 次/);
+  assert.match(items[2].label, /第 2 次/);
+  const summary = items.find((item) => item.kind === 'summary');
+  assert.match(summary.label, /100\.0%（3\/3）/);
+  assert.match(summary.label, /66\.7%（2\/3）/);
+  assert.match(summary.label, /重复结果有差异/);
+});
+
+test('missing and single samples are not presented as stable repeats', () => {
+  const [item] = regressionItems({ comparison: { scenarioSummaries: [{
+    scenarioId: 'new-case',
+    before: { sampleCount: 0, passedCount: 0, passRate: null, hasVariation: null },
+    after: { sampleCount: 1, passedCount: 1, passRate: 1, hasVariation: null },
+  }] } });
+  assert.match(item.label, /基线 无样本/);
+  assert.match(item.label, /样本不足以判断波动/);
+  assert.doesNotMatch(item.label, /已观察结果一致/);
+});

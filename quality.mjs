@@ -38,21 +38,33 @@ export function statusPresentation(status) {
 
 export function regressionItems(comparisonPayload) {
   const comparison = comparisonPayload?.comparison || {};
+  const caseLabel = (item) => `${item.scenarioId}${item.repetition == null ? '' : ` · 第 ${item.repetition} 次`}`;
   const scenario = (comparison.scenarioDiffs || []).filter(
     (item) => item.assertionRegression || item.recommendation?.changed,
   ).map((item) => ({
     kind: item.assertionRegression ? 'assertion' : 'recommendation',
     label: item.assertionRegression
-      ? `${item.scenarioId}：断言从通过变为未通过`
-      : `${item.scenarioId}：推荐 ${item.recommendation.before ?? '无'} → ${item.recommendation.after ?? '无'}`,
+      ? `${caseLabel(item)}：断言从通过变为未通过`
+      : `${caseLabel(item)}：推荐 ${item.recommendation.before ?? '无'} → ${item.recommendation.after ?? '无'}`,
   }));
   const gates = (comparisonPayload?.gates?.failures || []).map((item) => ({
     kind: item.priority === 'SAFETY' ? 'safety' : 'gate',
     label: item.metric
       ? `${item.metric}：${item.actual} < ${item.threshold}`
-      : `${item.scenarioId}：断言回归`,
+      : `${caseLabel(item)}：断言回归`,
   }));
-  return [...gates, ...scenario];
+  const summaryLabel = (summary) => {
+    if (!summary?.sampleCount) return '无样本';
+    const rate = `${(summary.passRate * 100).toFixed(1)}%（${summary.passedCount}/${summary.sampleCount}）`;
+    const variation = summary.hasVariation == null ? '样本不足以判断波动'
+      : summary.hasVariation ? '重复结果有差异' : '已观察结果一致';
+    return `${rate} · ${variation}`;
+  };
+  const summaries = (comparison.scenarioSummaries || []).map((item) => ({
+    kind: 'summary',
+    label: `${item.scenarioId}：基线 ${summaryLabel(item.before)} → 当前 ${summaryLabel(item.after)}`,
+  }));
+  return [...gates, ...scenario, ...summaries];
 }
 
 export function telemetryPresentation(available, label) {
