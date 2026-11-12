@@ -70,3 +70,11 @@ powershell -ExecutionPolicy Bypass -File .\ops\start-observability.ps1
 看板不能使用 `python -m http.server 3002` 启动，该命令不支持指标代理。
 Prometheus 每 10 秒采集一次；速率和 P95 需要采集启动后的新增对话。
 RabbitMQ 未启动时会显示不可用，其余服务的指标仍能正常显示。
+
+## 环境准备诊断
+
+实时运行视图新增独立的准备等待 P95（秒）、最近 5 分钟成功等待约算样本数，以及失败、超时、取消结果。少于 20 个样本显示“样本较少，直方图估算”；Prometheus `increase` 为外推估计，不代表精确请求条数。
+
+阶段卡片分别显示 sandbox/graph/sync 的 P95，阶段可能嵌套，不能相加或从总耗时相减来推算模型时间。缓存命中率只使用 hit/(hit+miss)，无访问时显示等待样本。池显示 ready/target/creating 和补充失败。旧 Agent 没有新指标时等待样本，Prometheus 不可达时显示不可用；诊断请求独立处理，不阻断其他可用视图和持久化质量数据。原总请求和首 Token 指标保留。
+
+验证：`node --test tests/preparation.test.mjs`。

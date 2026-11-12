@@ -41,6 +41,16 @@
       <article class="kpi accent-rose"><div class="kpi-head"><span>累计模型成本</span><i>USD</i></div><strong id="model-cost">—</strong><small>按配置单价实时估算</small><span class="kpi-note">便于成本归因与容量规划</span></article>
     </section>
 
+    <section class="panel preparation-panel" aria-label="环境准备诊断">
+      <div class="panel-head"><div><span class="panel-kicker">ENVIRONMENT READINESS</span><h2>环境准备诊断</h2></div><span id="preparation-note">等待样本</span></div>
+      <div class="preparation-grid">
+        <div><span>准备等待 P95</span><strong id="preparation-p95">—</strong><small id="preparation-samples">最近 5 分钟 · 等待样本</small></div>
+        <div><span>阶段耗时 P95</span><b id="preparation-stages">等待样本</b><small>阶段可能嵌套，不能相加或推算模型耗时</small></div>
+        <div><span>缓存命中率</span><b id="preparation-cache">等待样本</b><small id="preparation-outcomes">失败 / 超时 / 取消单独统计</small></div>
+        <div><span>预热池</span><b id="preparation-pool">—</b><small id="preparation-poolFailures">等待补充指标</small></div>
+      </div>
+    </section>
+
     <section class="dashboard-grid">
       <article class="panel chart-panel wide">
         <div class="panel-head"><div><span class="panel-kicker">AGENT EXPERIENCE</span><h2>响应质量趋势</h2></div><div class="legend"><span><i class="green"></i>成功率</span><span><i class="amber"></i>P95 耗时</span></div></div>

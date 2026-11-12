@@ -1,6 +1,7 @@
 const API = '/prometheus/api/v1';
 const $ = (id) => document.getElementById(id);
 const state = { rangeHours: 6, charts: {}, refreshing: false };
+const preparationModule = import('./preparation.mjs');
 
 const instantQueries = {
   success: '(sum(rate(agent_requests_total{status="success"}[5m])) or vector(0)) / sum(rate(agent_requests_total[5m]))',
@@ -147,6 +148,8 @@ function toast(message) { const node = $('toast'); node.textContent = message; n
 async function refresh() {
   if (state.refreshing) return; state.refreshing = true; $('refresh').disabled = true; $('refresh').textContent = '刷新中…';
   try {
+    // Optional diagnostics have an independent failure state.
+    preparationModule.then((module) => module.refreshPreparation(query, document)).catch(() => {});
     const entries = Object.entries(instantQueries);
     const [metrics, services] = await Promise.all([
       Promise.all(entries.map(async ([key, expression]) => [key, await query(expression)])),
