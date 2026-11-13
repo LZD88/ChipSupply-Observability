@@ -26,15 +26,33 @@
     <symbol id="icon-sliders" viewBox="0 0 24 24"><path d="M4 7h8m4 0h4M4 17h3m4 0h9"/><circle cx="14" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
     <symbol id="icon-route" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h7a4 4 0 0 1 0 8h-4a4 4 0 0 0 0 8M17 18h-5"/></symbol>
   </defs></svg>
-  <aside class="sidebar">
+  <aside class="sidebar" aria-label="工作空间导航">
     <a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span><b>芯链<span class="brand-tag">CONSOLE</span></b><small>评测与观测中心</small></span></a>
-    <div class="nav-label">工作空间</div>
+    <div class="sidebar-scroll">
+    <section class="sidebar-section" aria-labelledby="workspace-nav-label">
+    <div class="nav-label" id="workspace-nav-label">工作空间</div>
     <nav class="view-tabs" aria-label="看板视图">
       <button id="show-live" class="active" type="button" aria-current="page"><svg class="icon"><use href="#icon-grid"/></svg><span>Agent观测中心</span></button>
       <button id="show-quality" type="button"><svg class="icon"><use href="#icon-check"/></svg><span>评测中心</span></button>
-      <button id="show-releases" type="button"><svg class="icon"><use href="#icon-check"/></svg><span>提示词发布观测</span></button>
+      <button id="show-releases" type="button"><svg class="icon"><use href="#icon-layers"/></svg><span>提示词发布观测</span></button>
     </nav>
-    <div class="sidebar-links"><div class="nav-label">应用入口</div><a href="http://localhost:3000" target="_blank" rel="noopener"><span class="app-link-label"><svg class="icon"><use href="#icon-chat"/></svg>采购助手</span><svg class="icon external-arrow"><use href="#icon-arrow"/></svg></a><a href="http://localhost:8082" target="_blank" rel="noopener"><span class="app-link-label"><svg class="icon"><use href="#icon-grid"/></svg>ERP 平台</span><svg class="icon external-arrow"><use href="#icon-arrow"/></svg></a></div>
+    </section>
+    <section class="sidebar-section" aria-labelledby="application-nav-label">
+      <div class="nav-label" id="application-nav-label">应用入口</div>
+      <nav class="sidebar-links application-links" aria-label="业务应用">
+        <a href="http://localhost:3000" target="_blank" rel="noopener"><span class="app-link-label"><svg class="icon"><use href="#icon-chat"/></svg><span>采购助手</span></span><svg class="icon external-arrow"><use href="#icon-arrow"/></svg></a>
+        <a href="http://localhost:8082" target="_blank" rel="noopener"><span class="app-link-label"><svg class="icon"><use href="#icon-grid"/></svg><span>ERP 平台</span></span><svg class="icon external-arrow"><use href="#icon-arrow"/></svg></a>
+      </nav>
+    </section>
+    <section class="sidebar-section sidebar-tools" aria-labelledby="integration-nav-label">
+      <div class="nav-label" id="integration-nav-label">配置与调用追踪</div>
+      <nav class="sidebar-links integration-links" aria-label="配置与调用追踪">
+        <a href="http://localhost:18001" target="_blank" rel="noopener"><span class="app-link-label"><svg class="icon"><use href="#icon-route"/></svg>Higress 模型网关</span><svg class="icon external-arrow"><use href="#icon-arrow"/></svg></a>
+        <a href="http://localhost:18848/nacos" target="_blank" rel="noopener"><span class="app-link-label"><svg class="icon"><use href="#icon-sliders"/></svg>Nacos 配置中心</span><svg class="icon external-arrow"><use href="#icon-arrow"/></svg></a>
+        <a href="http://localhost:13000/project/chipchain-agent/traces" target="_blank" rel="noopener"><span class="app-link-label"><svg class="icon"><use href="#icon-pulse"/></svg>Langfuse 调用追踪</span><svg class="icon external-arrow"><use href="#icon-arrow"/></svg></a>
+      </nav>
+    </section>
+    </div>
     <div class="sidebar-bottom"><span class="workspace-avatar">芯</span><div><b>本地工作空间</b><small>Chip Supply Workspace</small></div><span class="workspace-dot" aria-label="本地环境"></span></div>
   </aside>
   <header class="topbar">
