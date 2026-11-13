@@ -2,12 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  accessPresentation,
+  assistantLoginUrl,
   metricPresentation,
   qualityState,
   regressionItems,
   statusPresentation,
   telemetryPresentation,
 } from '../quality.mjs';
+
+test('expired login and missing report access give different next steps', () => {
+  assert.equal(accessPresentation(401).loginRequired, true);
+  assert.match(accessPresentation(401).message, /登录已过期/);
+  assert.equal(accessPresentation(403).loginRequired, false);
+  assert.match(accessPresentation(403).message, /你已登录/);
+});
+
+test('login keeps the dashboard hostname so the session cookie is shared', () => {
+  assert.equal(assistantLoginUrl('http://localhost:3002/?x=1#evaluations'), 'http://localhost:3000/');
+  assert.equal(assistantLoginUrl('http://127.0.0.1:3002/#evaluations'), 'http://127.0.0.1:3000/');
+});
 
 
 test('completed failed cancelled and partial statuses remain distinct', () => {

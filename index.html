@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/styles.css">
   <script defer src="/app.js"></script>
   <script type="module" src="/quality.mjs"></script>
+  <script type="module" src="/workbench.mjs"></script>
   <script type="module" src="/releases.mjs"></script>
 </head>
 <body>
@@ -21,6 +22,9 @@
     <symbol id="icon-cost" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 9h18m-6 5h3"/></symbol>
     <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10"/></symbol>
     <symbol id="icon-chat" viewBox="0 0 24 24"><path d="M21 11a8 8 0 0 1-8 8H7l-4 3V11a9 9 0 0 1 18 0Z"/><path d="M8 10h8m-8 4h5"/></symbol>
+    <symbol id="icon-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></symbol>
+    <symbol id="icon-sliders" viewBox="0 0 24 24"><path d="M4 7h8m4 0h4M4 17h3m4 0h9"/><circle cx="14" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+    <symbol id="icon-route" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h7a4 4 0 0 1 0 8h-4a4 4 0 0 0 0 8M17 18h-5"/></symbol>
   </defs></svg>
   <aside class="sidebar">
     <a class="brand" href="/"><span class="brand-mark"><i></i><i></i><i></i></span><span><b>芯链<span class="brand-tag">CONSOLE</span></b><small>评测与观测中心</small></span></a>
@@ -120,7 +124,7 @@
 
     <section id="quality-view" class="quality-view" hidden aria-label="决策质量">
       <div class="quality-hero">
-        <div><span class="eyebrow">EVALUATION WORKSPACE</span><h1>评测中心</h1><p>对照基线检查决策质量，查看每一次执行的结果与证据。</p></div>
+        <div><span class="eyebrow">效果验证</span><h1>评测中心</h1><p>对照基线检查决策质量，查看每一次执行的结果与证据。</p></div>
         <div class="quality-controls">
           <label for="quality-run-select">评测运行</label>
           <select id="quality-run-select" aria-label="选择评测运行"></select>
@@ -128,8 +132,41 @@
         </div>
       </div>
 
+      <section id="evaluation-workbench" class="panel evaluation-workbench" aria-label="评测工作台">
+        <div class="wb-tabs" role="tablist" aria-label="评测操作">
+          <button type="button" role="tab" id="wb-tab-task" aria-controls="wb-task" aria-selected="true" data-wb-tab="task">新建评测</button>
+          <button type="button" role="tab" id="wb-tab-experiment" aria-controls="wb-experiment" aria-selected="false" data-wb-tab="experiment">实验对比</button>
+          <button type="button" role="tab" id="wb-tab-failures" aria-controls="wb-failures" aria-selected="false" data-wb-tab="failures">失败案例</button>
+        </div>
+        <div id="wb-message" class="wb-message" role="status">正在读取可用场景…</div>
+        <div id="wb-task" class="wb-pane" role="tabpanel" aria-labelledby="wb-tab-task">
+          <div class="wb-section-title"><div><h2>用固定场景验证这次修改</h2><p>选好场景后开始评测，结果会自动更新到下方报告。</p></div><span id="wb-access" class="wb-tag"></span></div>
+          <form id="wb-task-form">
+            <div class="wb-fields"><label>评测套件<select id="wb-suite" required></select></label><label>验证方式<select id="wb-mode"></select></label><label>每个场景执行次数<select id="wb-repetitions"><option value="1">1 次 · 快速检查</option><option value="3">3 次 · 观察稳定性</option></select></label></div>
+            <div class="wb-section-title wb-small-title"><b>选择要验证的场景</b><button type="button" id="wb-select-all" class="wb-secondary">全选 / 取消全选</button></div>
+            <div id="wb-scenarios" class="wb-scenarios"></div>
+            <div id="wb-task-variant" class="wb-fields"></div>
+            <div class="wb-footer"><span id="wb-task-hint">真实调用使用隔离测试数据，下单操作仅模拟。</span><button type="submit" data-maintain class="wb-primary">开始评测</button></div>
+          </form>
+        </div>
+        <div id="wb-experiment" class="wb-pane" role="tabpanel" aria-labelledby="wb-tab-experiment" hidden>
+          <div class="wb-section-title"><div><h2>哪个方案表现更好？</h2><p>两组使用“新建评测”中选定的相同场景。每次优先改变一个变量。</p></div></div>
+          <form id="wb-experiment-form"><div class="wb-arms"><fieldset><legend>方案 A · 对照组</legend><div id="wb-arm-a" class="wb-fields"></div></fieldset><fieldset><legend>方案 B · 新方案</legend><div id="wb-arm-b" class="wb-fields"></div></fieldset></div><div class="wb-footer"><span>新实验运行当前代码；代码修改前后的效果可在下方选择历史报告比较。</span><button class="wb-primary" type="submit" data-maintain>开始两组实验</button></div></form>
+          <div class="wb-comparison-controls"><label>已有实验<select id="wb-experiment-select"><option value="">选择已有实验</option></select></label><button id="wb-refresh-experiments" type="button" class="wb-secondary">刷新实验</button></div>
+          <div class="wb-comparison-controls"><label>历史报告 A<select id="wb-compare-a"></select></label><label>历史报告 B<select id="wb-compare-b"></select></label><button id="wb-compare" type="button" class="wb-secondary">比较报告</button></div>
+          <div id="wb-comparison" class="wb-comparison"><p>创建两组实验，或选择两份相同场景的报告开始比较。</p></div>
+        </div>
+        <div id="wb-failures" class="wb-pane" role="tabpanel" aria-labelledby="wb-tab-failures" hidden>
+          <div class="wb-section-title"><div><h2>修好之后，再验证一次</h2><p>在下方报告展开失败场景，点击“保存为回归案例”。重跑沿用原场景和预期结果。</p></div><button id="wb-refresh-failures" type="button" class="wb-secondary">刷新案例</button></div>
+          <div id="wb-replay-variant" class="wb-fields"></div>
+          <details class="wb-online-inbox"><summary>从我的线上失败请求保存案例</summary><p class="wb-muted">只显示当前账号最近 30 天的失败请求。选择对应检查场景后，原问题将在固定测试数据中回放，审批仅模拟。</p><form id="wb-online-form"><div class="wb-fields"><label>失败请求<select id="wb-online-source"></select></label><label>修复后应通过哪项检查<select id="wb-online-template"></select></label></div><p id="wb-online-question" class="wb-muted"></p><button class="wb-secondary" type="submit" data-maintain>保存线上失败为回归案例</button></form></details>
+          <div id="wb-failure-list" class="wb-failure-list"></div>
+          <div class="wb-pagination"><button id="wb-failure-prev" type="button" class="wb-secondary">上一页</button><span id="wb-failure-page">第 1 页</span><button id="wb-failure-next" type="button" class="wb-secondary">下一页</button></div>
+        </div>
+      </section>
+      <div class="wb-run-actions"><span id="wb-progress">请选择一份报告</span><div><button id="wb-cancel" type="button" class="wb-secondary" disabled>取消评测</button><button id="wb-baseline" type="button" class="wb-secondary" disabled>设为比较基线</button><button id="wb-export" type="button" class="wb-secondary" disabled>下载报告</button></div></div>
       <div class="evaluation-notice"><svg class="icon"><use href="#icon-check"/></svg><span>离线评测 / 测试证据<span class="notice-divider">·</span>基于固定场景的验证结果，不代表线上准确率或采购收益。</span></div>
-      <div class="quality-empty-shell" id="quality-empty-shell"><div class="empty-illustration" aria-hidden="true"><svg class="icon"><use href="#icon-check"/></svg><span></span><span></span></div><div id="quality-state" class="quality-state" data-state="loading" role="status">正在读取持久化评测报告…</div><a class="empty-action" id="quality-login-link" href="http://127.0.0.1:3000" target="_blank" rel="noopener" hidden>前往采购助手登录 <span>↗</span></a></div>
+      <div class="quality-empty-shell" id="quality-empty-shell"><div class="empty-illustration" aria-hidden="true"><svg class="icon"><use href="#icon-check"/></svg><span></span><span></span></div><div id="quality-state" class="quality-state" data-state="loading" role="status">正在读取持久化评测报告…</div><a class="empty-action" id="quality-login-link" href="http://localhost:3000" target="_blank" rel="noopener" hidden>前往采购助手登录 <span>↗</span></a></div>
       <div id="quality-content" hidden>
         <section class="quality-summary" aria-label="运行摘要">
           <article><span>场景执行</span><b id="quality-case-count">—</b><small id="quality-evidence-label">离线 / 测试证据</small></article>

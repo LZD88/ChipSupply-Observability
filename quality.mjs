@@ -1,9 +1,11 @@
 const QUALITY_API = '/api/evaluations';
 const telemetryState = { prometheus: null, tempo: null };
+let canMaintainEvaluation = false;
 
 export function metricPresentation(metric) {
   const denominator = Number(metric?.denominator || 0);
   const value = metric?.value;
+  if (metric?.status === 'NOT_AVAILABLE') return { value: metric.name === 'estimated_model_cost' ? '未配置单价或用量' : '未采集', detail: `有效样本 0 · 排除 ${metric.excluded || 0}`, state: 'not-available' };
   if (denominator === 0 || value == null) {
     return { value: '不适用', detail: `分母 0 · 排除 ${metric?.excluded || 0}`, state: 'not-applicable' };
   }
@@ -15,6 +17,8 @@ export function metricPresentation(metric) {
     rendered = `P50 ${numberLabel(value.p50)} ms · P95 ${numberLabel(value.p95)} ms · 最小 ${numberLabel(value.min)} ms · 最大 ${numberLabel(value.max)} ms`;
   } else if (metric.name === 'token_usage' && typeof value === 'object') {
     rendered = `总计 ${numberLabel(value.total)} · 输入 ${numberLabel(value.input)} · 输出 ${numberLabel(value.output)}`;
+  } else if (metric.name === 'estimated_model_cost' && typeof value === 'number') {
+    rendered = `${value.toLocaleString('zh-CN', { maximumFractionDigits: 6 })} ${metric.unit === 'configured_currency' ? '' : metric.unit}`.trim();
   }
   return {
     value: rendered,
@@ -27,6 +31,18 @@ export function qualityState({ status, runCount = 0 } = {}) {
   if (status === 401 || status === 403) return 'unauthorized';
   if (runCount === 0) return 'empty';
   return 'ready';
+}
+
+export function accessPresentation(status) {
+  return status === 401
+    ? { message: '登录已过期或尚未登录，请先登录采购助手，再返回此页刷新。', loginRequired: true }
+    : { message: '你已登录，但当前账号尚未开通评测报告查看权限，请联系管理员开通后刷新。', loginRequired: false };
+}
+
+export function assistantLoginUrl(pageUrl) {
+  const url = new URL(pageUrl);
+  url.port = '3000'; url.pathname = '/'; url.search = ''; url.hash = '';
+  return url.href;
 }
 
 export function statusPresentation(status) {
@@ -100,7 +116,7 @@ async function api(path) {
   return response.json();
 }
 
-function showState(name, message = '') {
+function showState(name, message = '', loginRequired = false) {
   const host = element('quality-state');
   host.dataset.state = name;
   host.textContent = message;
@@ -108,13 +124,20 @@ function showState(name, message = '') {
   const shell = element('quality-empty-shell');
   if (shell) shell.hidden = name === 'ready';
   const loginLink = element('quality-login-link');
-  if (loginLink) loginLink.hidden = name !== 'unauthorized';
+  if (loginLink) loginLink.hidden = !loginRequired;
   element('quality-refresh').disabled = name === 'loading';
   element('quality-run-select').disabled = name !== 'ready';
   element('quality-content').hidden = name !== 'ready';
 }
 
-const modeLabel = (mode) => ({ 'rule-contract': '规则契约', 'workflow-safety': '工作流安全' }[mode] || mode || '—');
+function showLoadError(error) {
+  if ([401, 403].includes(error.status)) {
+    const access = accessPresentation(error.status);
+    showState('unauthorized', access.message, access.loginRequired);
+  } else showState('error', `持久化评测报告暂时不可用：${error.message}`);
+}
+
+const modeLabel = (mode) => ({ 'rule-contract': '规则契约', 'workflow-safety': '审批边界模拟', 'prompt-candidate': '真实提示词评测', experiment: '真实 Agent 实验' }[mode] || mode || '—');
 const metricLabels = {
   hard_constraint_pass_rate: '硬约束通过率', expected_recommendation_agreement: '推荐一致率',
   unsafe_write_prevention: '危险写入拦截率', approval_boundary_compliance: '审批边界符合率',
@@ -128,7 +151,8 @@ function renderRunHeader(report, baseline) {
   const badge = element('quality-run-status');
   badge.textContent = status.label;
   badge.className = `quality-status ${status.tone}`;
-  element('quality-suite').textContent = `${report.suiteId}@${report.suiteVersion}`;
+  element('quality-suite').textContent = `${modeLabel(report.executionMode)} · v${report.suiteVersion}`;
+  element('quality-suite').title = `${report.suiteId}@${report.suiteVersion}`;
   const environment = report.manifest?.environment;
   element('quality-environment').textContent = ({ 'isolated-test': '隔离测试', local: '本地', ci: 'CI', staging: '预发布' })[environment] || environment || '未记录';
   element('quality-mode').textContent = modeLabel(report.executionMode || report.manifest?.executionMode);
@@ -149,6 +173,11 @@ function renderMetrics(metrics) {
       textNode('td', display.detail),
       textNode('td', modeLabel(metric.executionMode)),
     );
+    if (display.state === 'measured' && ['latency_distribution', 'token_usage'].includes(metric.name)) {
+      const parts = textNode('div', '', 'metric-parts');
+      display.value.split(' · ').forEach(part => parts.append(textNode('span', part, 'metric-part')));
+      row.children[1].replaceChildren(parts);
+    }
     host.append(row);
   });
   if (!host.children.length) {
@@ -179,9 +208,25 @@ function renderScenarios(cases) {
     details.append(summary);
     const assertions = textNode('p', `断言：${(item.assertions || []).filter((a) => a.status === 'PASSED').length}/${(item.assertions || []).length} 通过`);
     details.append(assertions);
+    const evidence = textNode('pre', JSON.stringify({ input: item.input, result: item.result, assertions: item.assertions, diagnostic: item.diagnostic }, null, 2), 'wb-evidence');
+    details.append(evidence);
+    if (['FAILED', 'TIMED_OUT', 'SETUP_ERROR', 'DEPENDENCY_ERROR'].includes(item.status)) {
+      const save = textNode('button', '保存为回归案例', 'wb-primary'); save.type = 'button';
+      save.dataset.maintain = ''; save.disabled = !canMaintainEvaluation;
+      save.addEventListener('click', () => window.dispatchEvent(new CustomEvent('evaluation-capture', { detail: { runId: element('quality-run-select').value, scenarioId: item.scenarioId, repetition: item.repetition } })));
+      details.append(save);
+    }
     const links = document.createElement('div'); links.className = 'scenario-links';
     const decisionId = item.result?.decisionId || item.result?.decision_id;
     const traceId = item.result?.traceId || item.result?.trace_id;
+    const langfuseTraceId = item.result?.langfuseTraceId;
+    if (langfuseTraceId && /^[a-f0-9]{32}$/.test(langfuseTraceId)) {
+      const url = new URL(window.location.href);
+      url.port = '13000'; url.pathname = `/project/chipchain-agent/traces/${langfuseTraceId}`;
+      url.search = ''; url.hash = '';
+      const link = textNode('a', '查看模型调用详情'); link.href = url.href;
+      link.target = '_blank'; link.rel = 'noopener'; links.append(link);
+    }
     if (decisionId) {
       const link = textNode('a', `决策证据 ${decisionId}`); link.href = `http://localhost:3000/?decisionId=${encodeURIComponent(decisionId)}`;
       link.target = '_blank'; link.rel = 'noopener'; links.append(link);
@@ -242,10 +287,14 @@ async function probeTelemetry() {
   updateTelemetry({ prometheus, tempo });
 }
 
-async function loadReport(runId) {
-  showState('loading', '正在读取持久化评测报告…');
+let reportTimer, reportSequence = 0;
+async function loadReport(runId, quiet = false) {
+  clearTimeout(reportTimer);
+  const sequence = ++reportSequence;
+  if (!quiet) showState('loading', '正在读取持久化评测报告…');
   try {
     const report = await api(`/runs/${encodeURIComponent(runId)}`);
+    if (sequence !== reportSequence) return;
     let baseline = null; let comparison = null;
     try {
       baseline = await api(`/baselines/${encodeURIComponent(report.suiteId)}/${encodeURIComponent(report.executionMode)}`);
@@ -255,42 +304,53 @@ async function loadReport(runId) {
     } catch (error) {
       if (![404, 409, 422].includes(error.status)) throw error;
     }
+    if (sequence !== reportSequence) return;
     renderRunHeader(report, baseline); renderMetrics(report.metrics); renderRegressions(comparison);
     renderScenarios(report.cases); showState('ready');
+    window.dispatchEvent(new CustomEvent('evaluation-report', { detail: report }));
+    if (['QUEUED', 'RUNNING'].includes(report.status)) reportTimer = setTimeout(() => {
+      if (window.location.hash === '#evaluations' && element('quality-run-select').value === runId) loadReport(runId, true);
+    }, 3000);
   } catch (error) {
-    if ([401, 403].includes(error.status)) showState('unauthorized', '当前账号没有评测报告查看权限。请先登录采购助手，或联系管理员开通权限。');
-    else showState('error', `持久化评测报告暂时不可用：${error.message}`);
+    showLoadError(error);
   }
 }
 
-async function loadRuns() {
+async function loadRuns(preferred) {
   showState('loading', '正在读取评测运行…');
   try {
     const payload = await api('/runs?size=50');
     const viewState = qualityState({ runCount: payload.items?.length || 0 });
     if (viewState === 'empty') { showState('empty', '还没有评测运行。请先执行默认套件并发布基线。'); return; }
-    const select = element('quality-run-select'); clear(select);
+    const select = element('quality-run-select'), previous = preferred || select.value; clear(select);
     payload.items.forEach((run) => {
       const option = document.createElement('option'); option.value = run.runId;
-      option.textContent = `${run.suiteId}@${run.suiteVersion} · ${statusPresentation(run.status).label} · ${run.runId.slice(0, 8)}`;
+      option.textContent = `${modeLabel(run.executionMode)}${run.variant?.modelId && ['experiment', 'prompt-candidate'].includes(run.executionMode) ? ' · ' + run.variant.modelId : ''} · ${statusPresentation(run.status).label} · ${run.runId.slice(0, 8)}`;
       select.append(option);
     });
+    if (previous && ![...select.options].some(o => o.value === previous) && preferred) {
+      const option = document.createElement('option'); option.value = preferred; option.textContent = `报告 ${preferred.slice(0, 8)}`; select.append(option);
+    }
+    if ([...select.options].some(o => o.value === previous)) select.value = previous;
+    else if (!preferred) select.value = payload.items.find(run => run.status === 'COMPLETED')?.runId || select.value;
     await loadReport(select.value);
   } catch (error) {
-    if ([401, 403].includes(error.status)) showState('unauthorized', '当前账号没有评测报告查看权限。请先登录采购助手，或联系管理员开通权限。');
-    else showState('error', `持久化评测报告暂时不可用：${error.message}`);
+    showLoadError(error);
   }
 }
 
 export function bootQualityView() {
   const qualityView = element('quality-view');
   if (!qualityView) return;
+  element('quality-login-link').href = assistantLoginUrl(window.location.href);
   const selectView = () => {
     const quality = window.location.hash === '#evaluations';
-    element('live-view').hidden = quality; qualityView.hidden = !quality;
-    element('page-location').textContent = quality ? '评测中心' : 'Agent观测中心';
-    element('range').hidden = quality; element('refresh').hidden = quality;
-    for (const [id, active] of [['show-live', !quality], ['show-quality', quality]]) {
+    const releases = window.location.hash === '#releases';
+    element('live-view').hidden = quality || releases; qualityView.hidden = !quality;
+    element('releases-view').hidden = !releases;
+    element('page-location').textContent = releases ? '提示词发布观测' : quality ? '评测中心' : 'Agent观测中心';
+    element('range').hidden = quality || releases; element('refresh').hidden = quality || releases;
+    for (const [id, active] of [['show-live', !quality && !releases], ['show-quality', quality], ['show-releases', releases]]) {
       const button = element(id);
       button.classList.toggle('active', active);
       if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
@@ -303,6 +363,8 @@ export function bootQualityView() {
   window.addEventListener('hashchange', selectView);
   element('quality-refresh').addEventListener('click', () => { loadRuns(); probeTelemetry(); });
   element('quality-run-select').addEventListener('change', (event) => loadReport(event.target.value));
+  window.addEventListener('evaluation-open-run', event => loadRuns(event.detail.runId));
+  window.addEventListener('evaluation-capabilities', event => { canMaintainEvaluation = event.detail.canMaintain; document.querySelectorAll('.quality-scenario [data-maintain]').forEach(n => { n.disabled = !canMaintainEvaluation; }); });
   window.addEventListener('live-telemetry-status', (event) => updateTelemetry(event.detail));
   updateTelemetry({ prometheus: null, tempo: null });
   probeTelemetry();

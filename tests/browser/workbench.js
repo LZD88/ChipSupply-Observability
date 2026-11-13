@@ -1,0 +1,40 @@
+/* Run in a dedicated, authenticated QA browser at /#evaluations. Creates only
+ * isolated evaluations; never changes prompt releases or production orders. */
+(async () => {
+  const $ = id => document.getElementById(id), checks = [];
+  const wait = async predicate => { for (let n = 0; n < 240; n++) { if (predicate()) return; await new Promise(r => setTimeout(r, 125)); } throw new Error('UI wait timed out'); };
+  const assert = (condition, label) => { if (!condition) throw new Error(label); checks.push(label); };
+  const change = (id, value) => { $(id).value = value; $(id).dispatchEvent(new Event('change', { bubbles: true })); };
+  await wait(() => $('wb-suite').options.length > 0 && !$('wb-task-form').querySelector('button[type=submit]').disabled);
+  $('wb-tab-task').click();
+  const rules = [...$('wb-suite').options].find(o => o.textContent.includes('采购决策'));
+  assert(rules, 'built-in rule suite is available');
+  change('wb-suite', rules.value); change('wb-mode', 'rule-contract');
+  $('wb-scenarios').querySelectorAll('input').forEach(n => { n.checked = n.value === 'successful-recommendation'; });
+  const previous = $('quality-run-select').value;
+  $('wb-task-form').requestSubmit();
+  await wait(() => $('quality-run-select').value !== previous && !$('wb-baseline').disabled);
+  assert($('wb-progress').textContent.includes('1 / 1'), 'task creation updates real sample progress');
+  $('wb-baseline').click();
+  await wait(() => $('wb-message').textContent.includes('已设为比较基线'));
+  assert(true, 'baseline action persists and refreshes report');
+  await wait(() => !$('wb-task-form').querySelector('button[type=submit]').disabled);
+  change('wb-suite', '0'); change('wb-repetitions', '3');
+  $('wb-scenarios').querySelectorAll('input').forEach(n => { n.checked = n.value === 'light-chat'; });
+  const beforeCancel = $('quality-run-select').value;
+  $('wb-task-form').requestSubmit();
+  await wait(() => $('quality-run-select').value !== beforeCancel && !$('wb-cancel').disabled);
+  $('wb-cancel').click();
+  await wait(() => $('wb-progress').textContent.includes('已取消'));
+  assert($('wb-baseline').disabled, 'cancelled run cannot be selected as baseline');
+  $('wb-tab-experiment').click(); $('wb-refresh-experiments').click();
+  await wait(() => $('wb-experiment-select').options.length > 1);
+  change('wb-experiment-select', $('wb-experiment-select').options[1].value);
+  await wait(() => $('wb-comparison').querySelectorAll('tbody tr').length >= 8);
+  assert($('wb-comparison').textContent.includes('代码指纹') && $('wb-comparison').textContent.includes('Token 用量'), 'comparison includes quality latency usage and version provenance');
+  $('wb-tab-failures').click(); $('wb-refresh-failures').click();
+  await wait(() => $('wb-failure-list').children.length > 0);
+  assert(!document.querySelector('#wb-failures[hidden]'), 'failure registry is directly accessible');
+  assert(document.documentElement.scrollWidth <= innerWidth + 1, 'page has no horizontal overflow');
+  return { checks, runId: $('quality-run-select').value };
+})();

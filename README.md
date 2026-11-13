@@ -1,7 +1,14 @@
 # 芯链可观测性中心
 
+新增 `/#releases` 提示词发布观测：读取 MySQL 中的版本、门禁、试用对比和审计，
+缺样本或用量明确显示不足。管理操作进入采购助手 `http://localhost:3000/#prompt-releases`。
+需要 `prompt:view` 或 `prompt:maintain` 权限，evaluation 权限不自动授予发布查看权限。
+代理仅允许明确列出的提示词 GET/HEAD 路径，不接受发布写请求。
+Windows 本地使用 Agent 的 `start_web.py` 管理 VirtualBox 沙箱，以及本仓库
+`ops/start-observability.ps1` 启动原生看板。下文 Compose 只作独立 Linux 部署参考，勿在本工作区使用 Docker Desktop。
+
 面向芯片采购平台的独立运行态与决策质量中心。Agent观测中心通过同源代理调用 Prometheus；
-“评测中心”通过只读 `/api/evaluations/` 代理读取 Agent MySQL 中的持久化评测报告。两者的
+“评测中心”通过 `/api/evaluations/` 代理读取 Agent MySQL 中的持久化评测报告，并提供受权限控制的评测操作。两者的
 数据源、状态和故障提示互相独立。
 
 界面采用深蓝侧栏与浅色工作区，可直接访问 `/#overview` 和 `/#evaluations`，支持浏览器返回及手机布局。
@@ -51,7 +58,7 @@ Token。`APP_CAPABILITY_BOOTSTRAP` 可赋予 `evaluation:view` / `evaluation:mai
 APP_CAPABILITY_BOOTSTRAP=reviewer=evaluation:view,maintainer=evaluation:view|evaluation:maintain
 ```
 
-评测响应统一 `no-store`；Nginx 只允许 GET/HEAD 访问质量 API，决策证据不会写入静态文件或
+评测响应统一 `no-store`；Nginx 默认只允许 GET/HEAD，创建任务、实验、保存案例、回放、取消和设置基线使用明确的写路径白名单，正文上限 64 KiB，仍由 Agent 校验登录、来源标记和维护权限。决策证据不会写入静态文件或
 Prometheus。fixture 结果必须称为“离线/测试证据”，不得表述为线上准确率、节省或 ROI。
 
 无请求样本时，看板显示“等待样本”；不会生成或伪造演示数据。
@@ -83,3 +90,23 @@ RabbitMQ 未启动时会显示不可用，其余服务的指标仍能正常显�
 阶段卡片分别显示 sandbox/graph/sync 的 P95，阶段可能嵌套，不能相加或从总耗时相减来推算模型时间。缓存命中率只使用 hit/(hit+miss)，无访问时显示等待样本。池显示 ready/target/creating 和补充失败。旧 Agent 没有新指标时等待样本，Prometheus 不可达时显示不可用；诊断请求独立处理，不阻断其他可用视图和持久化质量数据。原总请求和首 Token 指标保留。
 
 验证：`node --test tests/preparation.test.mjs`。
+
+## 提示词发布观测
+
+访问 `http://localhost:3002/#releases`，使用采购助手同一主机名登录态及 `prompt:view` 权限。
+该页只读代理版本、发布状态、门禁、审计和同窗请求观测；所有写方法返回 405，其他 Agent API 不开放。
+维护操作进入 `http://localhost:3000/#prompt-releases`，需额外的 `prompt:maintain` 权限。
+
+稳定版、试用版、历史版本、直接回复、旧会话分别统计；完整样本少于 20 显示样本不足，
+缺少 usage 显示未知费用。待审批会话列出原版本；401/403/503 会清空旧卡片并提示错误。
+发布证据保存在 MySQL，Prometheus 或 Tempo 故障不影响读取；线上明细仅保留 30 天。
+
+验证：`python -m unittest discover -s tests -p 'test_*.py'`、`node --test tests/*.test.mjs`。
+登录后在浏览器执行 `tests/browser/releases.js` 检查 11 项状态与交互；脚本仅在当前页拦截测试请求，
+结束后恢复真实 API，不创建发布或评测数据。
+
+## 评测工作台
+
+在评测中心选择场景创建任务，查看执行进度、取消运行、下载报告或设为基线；“对比实验”支持模型、提示词和技能的配对对比，历史代码通过已有报告对比，不执行上传的代码。
+“回归案例”可保存失败证据，导入本人线上失败问题，并在隔离环境中重复回放三次；完整通过后才标记解决。实验结果不作为提示词发布门禁证据，缺少单价或用量时费用显示未知。
+查看需要 `evaluation:view`，操作需要 `evaluation:maintain`。侧栏分为工作空间、应用入口、配置与调用追踪，短窗口中导航独立滚动。

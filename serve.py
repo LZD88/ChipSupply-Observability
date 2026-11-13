@@ -94,8 +94,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         cookie = self.headers.get("Cookie")
         if cookie:
             headers["Cookie"] = cookie
+        body = None
+        if self.command in {"POST", "PUT"}:
+            headers.update({"Content-Type": "application/json", "X-Requested-With": self.headers.get("X-Requested-With", "")})
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
         request = Request(self.agent_api_url + self.path, headers=headers,
-                          method="HEAD" if head_only else "GET")
+                          data=body, method="HEAD" if head_only else self.command)
         try:
             with self.opener.open(request, timeout=15) as response:
                 self._reply(response.status, response.read(),
@@ -134,6 +138,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
+        allowed = ((self.command == "POST" and re.fullmatch(r"/api/evaluations/(?:tasks|experiments|failures|online-failures/capture|runs/[A-Za-z0-9-]{1,36}/cancel|failures/[A-Za-z0-9-]{1,36}/replay)", path))
+                   or (self.command == "PUT" and path == "/api/evaluations/baselines"))
+        if allowed:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                length = -1
+            if length < 0 or length > 65536 or self.headers.get("Transfer-Encoding"):
+                self._reply(413, b'{"detail":"invalid request size"}', "application/json", no_store=True)
+                return
+            if self.headers.get("X-Requested-With") != "DeepAgent":
+                self._reply(403, b'{"detail":"invalid request header"}', "application/json", no_store=True)
+                return
+            self._proxy_quality()
+            return
         if path == "/api/evaluations" or path.startswith(("/api/evaluations/", "/api/prompt-releases/")):
             body = json.dumps({"detail": "read-only quality proxy"}).encode()
             self._reply(405, body, "application/json; charset=utf-8", no_store=True)
