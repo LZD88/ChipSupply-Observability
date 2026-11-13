@@ -4,6 +4,7 @@ import argparse
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import re
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -11,6 +12,10 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 
 ROOT = Path(__file__).resolve().parent
+
+
+def release_read_path(path):
+    return bool(re.fullmatch(r"/api/prompt-releases/(?:state|versions|observations|history|capabilities|versions/[A-Za-z0-9_-]{1,64})", path))
 
 
 class DashboardHandler(SimpleHTTPRequestHandler):
@@ -49,6 +54,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self._proxy_health(upstream, head_only=head_only)
             return
         if path == "/api/evaluations" or path.startswith("/api/evaluations/"):
+            self._proxy_quality(head_only=head_only)
+            return
+        if release_read_path(path):
             self._proxy_quality(head_only=head_only)
             return
         if path.startswith("/api/"):
@@ -126,11 +134,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
-        if path == "/api/evaluations" or path.startswith("/api/evaluations/"):
+        if path == "/api/evaluations" or path.startswith(("/api/evaluations/", "/api/prompt-releases/")):
             body = json.dumps({"detail": "read-only quality proxy"}).encode()
             self._reply(405, body, "application/json; charset=utf-8", no_store=True)
             return
         self.send_error(404)
+
+    do_PUT = do_POST
+    do_PATCH = do_POST
+    do_DELETE = do_POST
 
     def log_request(self, code="-", size="-"):
         if str(code).startswith(("4", "5")):

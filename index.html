@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/styles.css">
   <script defer src="/app.js"></script>
   <script type="module" src="/quality.mjs"></script>
+  <script type="module" src="/releases.mjs"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳至主要内容</a>
@@ -27,6 +28,7 @@
     <nav class="view-tabs" aria-label="看板视图">
       <button id="show-live" class="active" type="button" aria-current="page"><svg class="icon"><use href="#icon-grid"/></svg><span>Agent观测中心</span></button>
       <button id="show-quality" type="button"><svg class="icon"><use href="#icon-check"/></svg><span>评测中心</span></button>
+      <button id="show-releases" type="button"><svg class="icon"><use href="#icon-check"/></svg><span>提示词发布观测</span></button>
     </nav>
     <div class="sidebar-links"><div class="nav-label">应用入口</div><a href="http://localhost:3000" target="_blank" rel="noopener"><span class="app-link-label"><svg class="icon"><use href="#icon-chat"/></svg>采购助手</span><svg class="icon external-arrow"><use href="#icon-arrow"/></svg></a><a href="http://localhost:8082" target="_blank" rel="noopener"><span class="app-link-label"><svg class="icon"><use href="#icon-grid"/></svg>ERP 平台</span><svg class="icon external-arrow"><use href="#icon-arrow"/></svg></a></div>
     <div class="sidebar-bottom"><span class="workspace-avatar">芯</span><div><b>本地工作空间</b><small>Chip Supply Workspace</small></div><span class="workspace-dot" aria-label="本地环境"></span></div>
@@ -42,6 +44,13 @@
   </header>
 
   <main id="main-content">
+    <div id="releases-view" hidden>
+      <section class="intro"><div><span class="eyebrow">PROMPT RELEASE OBSERVATION</span><h1>提示词发布观测</h1><p>从固定评测到实际请求，查看每个版本的效果与发布依据。</p></div><a href="http://localhost:3000/#prompt-releases">打开提示词管理 ↗</a></section>
+      <div id="release-status" role="status"></div>
+      <section class="kpi-grid" id="release-cards"></section>
+      <section class="panel release-panel"><h2>过去 24 小时 · 同窗对比</h2><p>成功率反映请求完成情况；每组至少 20 个完整请求才满足推广样本门槛。无 usage 的请求不计为零成本。</p><div class="table-scroll"><table id="release-comparison"></table></div><div id="release-pending"></div></section>
+      <section class="panel release-panel"><h2>门禁证据与发布时间线</h2><div id="release-history"></div></section>
+    </div>
     <div id="live-view">
     <section class="intro">
       <div><span class="eyebrow">OPERATIONS OVERVIEW</span><h1>Agent观测中心</h1><p>查看采购 Agent 的运行表现，定位环境与服务异常。</p></div>
